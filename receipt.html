@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>領収書作成</title>
+    <title>請求書作成</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
@@ -50,6 +50,14 @@
             border-radius: 4px;
             box-sizing: border-box;
         }
+        .item-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .item-row input {
+            flex: 1;
+        }
         .client-row {
             display: flex;
             gap: 10px;
@@ -76,6 +84,34 @@
         button:hover {
             background-color: #45a049;
         }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            text-align: center;
+            font-weight: normal;
+            background-color: #fff;
+        }
+        .total-row {
+            background-color: #f2f2f2;
+        }
+        .right-align {
+            text-align: right;
+        }
+        .total-line {
+            display: inline-block;
+            border-bottom: 2px solid #000;
+            font-weight: bold;
+            font-size: 18px;
+            margin: 15px 0;
+        }
         .hidden {
             display: none;
         }
@@ -87,8 +123,30 @@
             font-size: 28px;
             margin-top: 0;
         }
+        .invoice-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
         .right-align {
             text-align: right;
+        }
+        .invoice-title {
+            font-size: 32px;
+            font-weight: bold;
+        }
+        .invoice-date {
+            margin-bottom: 10px;
+        }
+        .invoice-to {
+            margin: 20px 0;
+        }
+        .notes-container {
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            padding: 8px;
+            width: 100%;
+            box-sizing: border-box;
         }
         #preview {
             width: 210mm;
@@ -99,52 +157,6 @@
             background-color: white;
             overflow: hidden;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
-        }
-        .receipt {
-            margin-bottom: 15mm;
-            page-break-inside: avoid;
-        }
-        .receipt-title {
-            font-size: 30px;
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .receipt-content {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        .receipt-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-        }
-        .receipt-name {
-            font-size: 18px;
-            margin-right: 30px;
-            flex: 1;
-            display: inline-block;
-        }
-        .name-with-underline {
-            border-bottom: 1px solid #000;
-            padding-bottom: 5px;
-            display: inline-block;
-        }
-        .receipt-date {
-            font-size: 16px;
-        }
-        .receipt-amount {
-            font-size: 24px;
-            font-weight: bold;
-            text-align: center;
-            margin-top: 10px;
-            margin-bottom: 20px;
-        }
-        .receipt-confirmation {
-            font-size: 16px;
-            margin-top: 20px;
-            text-align: center;
         }
         .radio-group {
             display: flex;
@@ -159,12 +171,6 @@
         }
         .radio-label input {
             width: auto;
-        }
-        .receipt-divider {
-            height: 1px;
-            background-color: #000;
-            margin: 15px 0;
-            width: 100%;
         }
         @media print {
             .input-section, .btn-group {
@@ -183,11 +189,11 @@
     </style>
 </head>
 <body>
-    <h1>領収書作成</h1>
+    <h1>請求書作成</h1>
     <div class="container">
         <div class="input-section">
             <div class="form-group">
-                <label>宛先:</label>
+                <label>請求先:</label>
                 <div class="radio-group">
                     <label class="radio-label">
                         <input type="radio" name="client-mode" value="single" checked> 一人
@@ -203,12 +209,31 @@
                 </div>
             </div>
             <div class="form-group">
-                <label for="date">日付:</label>
+                <label for="date">請求日:</label>
                 <input type="date" id="date">
             </div>
             <div class="form-group">
-                <label for="amount">金額:</label>
-                <input type="number" id="amount" placeholder="例: 10000">
+                <label for="tax-rate">消費税率 (%):</label>
+                <select id="tax-rate">
+                    <option value="10">10%</option>
+                    <option value="8">8%</option>
+                    <option value="0">0%</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>品名:</label>
+                <div id="items-container">
+                    <div class="item-row" data-row="1">
+                        <input type="text" class="item-name" placeholder="品名" oninput="handleItemInput(this)">
+                        <input type="number" class="item-quantity" placeholder="数量" onchange="calculateAmount(this)">
+                        <input type="number" class="item-price" placeholder="単価" onchange="calculateAmount(this)">
+                        <input type="number" class="item-amount" placeholder="金額" readonly>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="notes">備考:</label>
+                <textarea id="notes" rows="4" placeholder="備考欄"></textarea>
             </div>
             <div class="btn-group">
                 <button id="update-btn">更新</button>
@@ -217,7 +242,7 @@
         </div>
         <div class="preview-section">
             <div id="preview">
-                <!-- 領収書プレビューはここに表示されます -->
+                <!-- 請求書プレビューはここに表示されます -->
             </div>
         </div>
     </div>
@@ -238,6 +263,50 @@
             // PDFで保存ボタンのイベントリスナー
             document.getElementById('download-btn').addEventListener('click', downloadPDF);
             
+            // 初期化処理
+            document.addEventListener('DOMContentLoaded', function () {
+                const defaultRadio = document.querySelector('input[name="client-mode"][value="single"]');
+                if (defaultRadio) {
+                    defaultRadio.checked = true; // デフォルトで「単一人モード」を選択
+                    defaultRadio.dispatchEvent(new Event('change')); // changeイベントを手動でトリガー
+                }
+            });
+
+            // クライアントモードのラジオボタン変更イベント
+            document.querySelectorAll('input[name="client-mode"]').forEach(radio => {
+                radio.addEventListener('change', function () {
+                    // 複数人モードに切り替わった時に2行目以降を削除
+                    if (this.value === 'multiple') {
+                        const rows = document.querySelectorAll('.client-row');
+                        if (rows.length > 1) {
+                            for (let i = rows.length - 1; i > 0; i--) {
+                                rows[i].remove();
+                            }
+                        }
+
+                        // 1行目のvalueを保持
+                        const firstRowInput = document.querySelector('.client-row[data-row="1"] .client-name');
+                        const value = firstRowInput.value;
+
+                        // 入力があれば2行目を追加
+                        if (value.trim().length > 0) {
+                            addNewClientRow(2);
+                        }
+                    }
+
+                    // 単一人モードに切り替わった時に2行目以降を削除
+                    if (this.value === 'single') {
+                        const rows = document.querySelectorAll('.client-row');
+                        if (rows.length > 1) {
+                            for (let i = rows.length - 1; i > 0; i--) {
+                                rows[i].remove();
+                            }
+                        }
+                    }
+
+                    updatePreview();
+                });
+            });
             // クライアントモードのラジオボタン変更イベント
             document.querySelectorAll('input[name="client-mode"]').forEach(radio => {
                 radio.addEventListener('change', function() {
@@ -367,82 +436,223 @@
             });
         }
 
+        // 品目入力の処理
+        function handleItemInput(input) {
+            const row = input.closest('.item-row');
+            const rowNumber = parseInt(row.getAttribute('data-row'));
+            const itemName = input.value.trim();
+            
+            // 次の行が必要かどうかをチェック
+            if (itemName.length > 0) {
+                // 次の行が存在しない場合は追加
+                const nextRow = document.querySelector(`.item-row[data-row="${rowNumber + 1}"]`);
+                if (!nextRow) {
+                    addNewRow(rowNumber + 1);
+                }
+            } else {
+                // 品名が空で2行目以降の場合、行を削除
+                if (rowNumber > 1) {
+                    // 後続の行がある場合のみ削除
+                    const hasNextRows = document.querySelector(`.item-row[data-row="${rowNumber + 1}"]`);
+                    if (!hasNextRows) {
+                        row.querySelectorAll('input').forEach(input => input.value = '');
+                    } else {
+                        row.remove();
+                        // 行番号の再振り分け
+                        updateRowNumbers();
+                    }
+                } else {
+                    // 1行目の場合は、2行目以降があれば値をクリア、なければそのまま
+                    const hasNextRows = document.querySelector(`.item-row[data-row="2"]`);
+                    if (!hasNextRows) {
+                        row.querySelectorAll('input').forEach(input => {
+                            if (!input.classList.contains('item-name')) {
+                                input.value = '';
+                            }
+                        });
+                    } else {
+                        row.querySelectorAll('input').forEach(input => input.value = '');
+                    }
+                }
+            }
+            
+            // 1行目が空で、2行目以降も何も入力されていない場合は2行目を削除
+            const firstRow = document.querySelector('.item-row[data-row="1"]');
+            const secondRow = document.querySelector('.item-row[data-row="2"]');
+            
+            if (firstRow && secondRow) {
+                const firstRowEmpty = firstRow.querySelector('.item-name').value.trim() === '';
+                const secondRowEmpty = secondRow.querySelector('.item-name').value.trim() === '';
+                
+                if (firstRowEmpty && secondRowEmpty) {
+                    secondRow.remove();
+                }
+            }
+            
+            calculateTotals();
+            updatePreview();
+        }
+
+        // 新しい行を追加
+        function addNewRow(rowNumber) {
+            const container = document.getElementById('items-container');
+            const newRow = document.createElement('div');
+            newRow.className = 'item-row';
+            newRow.setAttribute('data-row', rowNumber);
+            newRow.innerHTML = `
+                <input type="text" class="item-name" placeholder="品名" oninput="handleItemInput(this)">
+                <input type="number" class="item-quantity" placeholder="数量" onchange="calculateAmount(this)">
+                <input type="number" class="item-price" placeholder="単価" onchange="calculateAmount(this)">
+                <input type="number" class="item-amount" placeholder="金額" readonly>
+            `;
+            container.appendChild(newRow);
+        }
+
+        // 行番号の更新
+        function updateRowNumbers() {
+            const rows = document.querySelectorAll('.item-row');
+            rows.forEach((row, index) => {
+                row.setAttribute('data-row', index + 1);
+            });
+        }
+
+        // 金額の計算
+        function calculateAmount(input) {
+            const row = input.closest('.item-row');
+            const quantity = parseFloat(row.querySelector('.item-quantity').value) || 0;
+            const price = parseFloat(row.querySelector('.item-price').value) || 0;
+            const amount = quantity * price;
+            row.querySelector('.item-amount').value = amount;
+            calculateTotals();
+            updatePreview();
+        }
+
+        // 合計金額の計算
+        function calculateTotals() {
+            let subtotal = 0;
+            document.querySelectorAll('.item-amount').forEach(input => {
+                subtotal += parseFloat(input.value) || 0;
+            });
+            
+            const taxRate = parseFloat(document.getElementById('tax-rate').value) / 100;
+            // 税額は小数点以下切り捨て
+            const tax = Math.floor(subtotal * taxRate);
+            const total = subtotal + tax;
+            
+            return {
+                subtotal: subtotal,
+                taxRate: taxRate,
+                tax: tax,
+                total: total
+            };
+        }
+
+        // プレビューの更新
         function updatePreview() {
             const dateInput = document.getElementById('date').value || '';
-            const amount = parseFloat(document.getElementById('amount').value) || 0;
+            const notes = document.getElementById('notes').value || '';
+            const taxRate = parseFloat(document.getElementById('tax-rate').value);
             const clientMode = document.querySelector('input[name="client-mode"]:checked').value;
-
+            
+            // 日付のフォーマット
             let formattedDate = '';
             if (dateInput) {
                 const date = new Date(dateInput);
                 formattedDate = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
             }
-
-            let previewHTML = '';
-
+            
+            // 品目の取得
+            const items = [];
+            document.querySelectorAll('.item-row').forEach(row => {
+                const name = row.querySelector('.item-name').value.trim();
+                if (name) {
+                    items.push({
+                        name: name,
+                        quantity: parseFloat(row.querySelector('.item-quantity').value) || 0,
+                        price: parseFloat(row.querySelector('.item-price').value) || 0,
+                        amount: parseFloat(row.querySelector('.item-amount').value) || 0
+                    });
+                }
+            });
+            
+            // 合計の計算
+            const totals = calculateTotals();
+            
+            // 単一人モードの場合
             if (clientMode === 'single') {
-                // 単一人モードでは空欄でも表示
                 const client = document.querySelector('.client-row .client-name').value || '';
-                previewHTML = `<div class="preview-page">${generateReceiptHTML(client, formattedDate, amount)}</div>`;
-            } else {
-                // 複数人モード：氏名が1文字以上入力された人のみ表示
-                const clients = [];
-                document.querySelectorAll('.client-row').forEach(row => {
-                    const name = row.querySelector('.client-name').value.trim();
-                    if (name.length > 0) {
-                        clients.push(name);
-                    }
-                });
-
-                // 全員空欄なら1人目の枠だけでも表示（空欄でも）
-                if (clients.length === 0) {
-                    clients.push('');
-                }
-
-                // 3人ごとにページを分けて表示
-                let pages = [];
-                for (let i = 0; i < clients.length; i += 3) {
-                    let pageHTML = '';
-                    let pageClients = clients.slice(i, i + 3);
-
-                    for (let j = 0; j < pageClients.length; j++) {
-                        pageHTML += generateReceiptHTML(pageClients[j], formattedDate, amount);
-                        if (j < pageClients.length - 1) {
-                            pageHTML += '<div class="receipt-divider"></div>';
-                        }
-                    }
-
-                    pages.push(`<div class="preview-page">${pageHTML}</div>`);
-                }
-
-                // すべてのページを結合
-                previewHTML = pages.join('<div class="page-break"></div>');
+                generateInvoicePreview(client, formattedDate, items, totals, notes);
+            } 
+            // 複数人モードの場合
+            else {
+                // 最初のクライアントのみプレビュー表示
+                const client = document.querySelector('.client-row .client-name').value || '';
+                generateInvoicePreview(client, formattedDate, items, totals, notes);
             }
-
-            // プレビューに反映
-            document.getElementById('preview').innerHTML = previewHTML;
         }
 
-        // 初期状態でプレビューを表示
-        document.addEventListener('DOMContentLoaded', function() {
-            updatePreview();
-        });
-    
-
-        function generateReceiptHTML(client, formattedDate, amount) {
-            return `
-                <div class="receipt">
-                    <div class="receipt-title">領収書</div>
-                    <div class="receipt-content">
-                        <div class="receipt-row">
-                            <div class="receipt-name">${client} 様</div>
-                            <div class="receipt-date">${formattedDate}</div>
-                        </div>
-                        <div class="receipt-amount" style="border-bottom: 1px solid #000; padding-bottom: 5px; width: 100%;">¥${amount.toLocaleString()}-</div>
-                        <div class="receipt-confirmation">上記、正に領収いたしました</div>
-                    </div>
+        // 請求書プレビューの生成
+        function generateInvoicePreview(client, formattedDate, items, totals, notes) {
+            let previewHTML = `
+                <div class="invoice-header">
+                    <div class="invoice-title">請求書</div>
+                    <div class="invoice-date">請求日: ${formattedDate}</div>
                 </div>
+                <div class="invoice-to">${client} 様</div>
+                <p>下記の通りご請求申し上げます。</p>
+                <div class="total-line">合計金額　　¥${totals.total.toLocaleString()}-</div>
+                <br>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>品名</th>
+                            <th>数量</th>
+                            <th>単価</th>
+                            <th>金額</th>
+                        </tr>
+                    </thead>
+                    <tbody>
             `;
+            
+            items.forEach(item => {
+                previewHTML += `
+                    <tr>
+                        <td>${item.name}</td>
+                        <td>${item.quantity}</td>
+                        <td>¥${item.price.toLocaleString()}</td>
+                        <td>¥${item.amount.toLocaleString()}</td>
+                    </tr>
+                `;
+            });
+            
+            previewHTML += `
+                    <tr>
+                        <td colspan="3" class="right-align">小計</td>
+                        <td>¥${totals.subtotal.toLocaleString()}</td>
+                    </tr>
+            `;
+            
+            // 税率が0%でない場合のみ税金の行を表示
+            if (totals.taxRate > 0) {
+                previewHTML += `
+                    <tr>
+                        <td colspan="3" class="right-align">税(${totals.taxRate * 100}%)</td>
+                        <td>¥${totals.tax.toLocaleString()}</td>
+                    </tr>
+                `;
+            }
+            
+            previewHTML += `
+                    <tr class="total-row">
+                        <td colspan="3" class="right-align">合計</td>
+                        <td>¥${totals.total.toLocaleString()}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="notes-container">備考: ${notes}</div>
+            `;
+            
+            document.getElementById('preview').innerHTML = previewHTML;
         }
 
         // PDFのダウンロード
@@ -494,7 +704,7 @@
                 
                 // ファイル名を生成（現在の日時を含む）
                 const today = new Date();
-                const fileName = `領収書_${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}.pdf`;
+                const fileName = `請求書_${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}.pdf`;
                 pdf.save(fileName);
             });
         }
@@ -503,7 +713,8 @@
         function generateMultiplePDF() {
             const { jsPDF } = window.jspdf;
             const dateInput = document.getElementById('date').value || '';
-            const amount = parseFloat(document.getElementById('amount').value) || 0;
+            const notes = document.getElementById('notes').value || '';
+            const taxRate = parseFloat(document.getElementById('tax-rate').value);
             
             // 日付のフォーマット
             let formattedDate = '';
@@ -511,6 +722,23 @@
                 const date = new Date(dateInput);
                 formattedDate = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
             }
+            
+            // 品目の取得
+            const items = [];
+            document.querySelectorAll('.item-row').forEach(row => {
+                const name = row.querySelector('.item-name').value.trim();
+                if (name) {
+                    items.push({
+                        name: name,
+                        quantity: parseFloat(row.querySelector('.item-quantity').value) || 0,
+                        price: parseFloat(row.querySelector('.item-price').value) || 0,
+                        amount: parseFloat(row.querySelector('.item-amount').value) || 0
+                    });
+                }
+            });
+            
+            // 合計の計算
+            const totals = calculateTotals();
             
             // クライアントリストの取得（空でない行のみ）
             const clients = [];
@@ -523,32 +751,25 @@
             
             // クライアントがいない場合は処理を中止
             if (clients.length === 0) {
-                alert('宛先が設定されていません。');
+                alert('請求先が設定されていません。');
                 return;
             }
             
             // PDF生成
             const pdf = new jsPDF('p', 'mm', 'a4');
-            
-            // 3人ずつ処理
-            for (let i = 0; i < clients.length; i += 3) {
-                // プレビューを更新
-                let previewHTML = '';
-                
-                // 現在のページに表示する人数（最大3人）
-                const currentPageClients = clients.slice(i, Math.min(i + 3, clients.length));
-                
-                // 領収書HTML生成
-                for (let j = 0; j < currentPageClients.length; j++) {
-                    previewHTML += generateReceiptHTML(currentPageClients[j], formattedDate, amount);
-                    
-                    // 区切り線を追加（最後の領収書以外）
-                    if (j < currentPageClients.length - 1) {
-                        previewHTML += '<div class="receipt-divider"></div>';
-                    }
+            const processClient = (index) => {
+                if (index >= clients.length) {
+                    // すべてのクライアントの処理が完了したらPDFを保存
+                    const today = new Date();
+                    const fileName = `請求書_${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}.pdf`;
+                    pdf.save(fileName);
+                    return;
                 }
                 
-                document.getElementById('preview').innerHTML = previewHTML;
+                const client = clients[index];
+                
+                // プレビューを更新
+                generateInvoicePreview(client, formattedDate, items, totals, notes);
                 
                 // プレビュー要素
                 const element = document.getElementById('preview');
@@ -576,83 +797,18 @@
                         pdf.addImage(imgData, 'PNG', 0, 0, imageWidth, imageHeight);
                     }
                     
-                    // まだ処理するクライアントが残っていれば新しいページを追加
-                    if (i + 3 < clients.length) {
+                    // 次のクライアントのページを追加（最後のクライアント以外）
+                    if (index < clients.length - 1) {
                         pdf.addPage();
-                        
-                        // 次のページを処理（再帰的に呼び出し）
-                        if (i + 3 < clients.length) {
-                            generateNextPage(i + 3);
-                        }
-                    } else {
-                        // すべての処理が完了したらPDFを保存
-                        const today = new Date();
-                        const fileName = `領収書_${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}.pdf`;
-                        pdf.save(fileName);
                     }
+                    
+                    // 次のクライアントを処理
+                    processClient(index + 1);
                 });
-                
-                // 次のページの処理を行う関数
-                function generateNextPage(startIndex) {
-                    let nextPreviewHTML = '';
-                    
-                    // 次のページに表示する人数（最大3人）
-                    const nextPageClients = clients.slice(startIndex, Math.min(startIndex + 3, clients.length));
-                    
-                    // 領収書HTML生成
-                    for (let j = 0; j < nextPageClients.length; j++) {
-                        nextPreviewHTML += generateReceiptHTML(nextPageClients[j], formattedDate, amount);
-                        
-                        // 区切り線を追加（最後の領収書以外）
-                        if (j < nextPageClients.length - 1) {
-                            nextPreviewHTML += '<div class="receipt-divider"></div>';
-                        }
-                    }
-                    
-                    document.getElementById('preview').innerHTML = nextPreviewHTML;
-                    
-                    // プレビュー要素
-                    const nextElement = document.getElementById('preview');
-                    
-                    // 次のページを生成
-                    html2canvas(nextElement, {
-                        scale: 2,
-                        useCORS: true,
-                        logging: false
-                    }).then(nextCanvas => {
-                        const nextImgData = nextCanvas.toDataURL('image/png');
-                        const pdfWidth = pdf.internal.pageSize.getWidth();
-                        const pdfHeight = pdf.internal.pageSize.getHeight();
-                        
-                        // キャンバスの比率を維持しつつA4サイズに合わせる
-                        const canvasRatio = nextCanvas.height / nextCanvas.width;
-                        const imageWidth = pdfWidth;
-                        const imageHeight = imageWidth * canvasRatio;
-                        
-                        // 画像がA4のサイズを超えた場合はスケーリング
-                        if (imageHeight > pdfHeight) {
-                            const scale = pdfHeight / imageHeight;
-                            pdf.addImage(nextImgData, 'PNG', 0, 0, pdfWidth * scale, pdfHeight);
-                        } else {
-                            pdf.addImage(nextImgData, 'PNG', 0, 0, imageWidth, imageHeight);
-                        }
-                        
-                        // まだ処理するクライアントが残っていれば新しいページを追加
-                        if (startIndex + 3 < clients.length) {
-                            pdf.addPage();
-                            generateNextPage(startIndex + 3);
-                        } else {
-                            // すべての処理が完了したらPDFを保存
-                            const today = new Date();
-                            const fileName = `領収書_${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}.pdf`;
-                            pdf.save(fileName);
-                        }
-                    });
-                }
-                
-                // 最初のページ以降は処理しない（再帰的に行うため）
-                break;
-            }
+            };
+            
+            // 最初のクライアントから処理開始
+            processClient(0);
         }
     </script>
 </body>
